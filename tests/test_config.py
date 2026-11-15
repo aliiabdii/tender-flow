@@ -38,3 +38,21 @@ def test_invalid_environment_is_rejected(monkeypatch: pytest.MonkeyPatch) -> Non
 
     with pytest.raises(ValidationError):
         Settings()
+
+
+def test_database_credentials_are_not_printable() -> None:
+    url = "postgresql+psycopg2://test:synthetic-password@localhost/test"
+
+    assert "synthetic-password" not in repr(Settings(database_url=url))
+
+
+def test_unsupported_database_url_error_does_not_expose_credentials() -> None:
+    with pytest.raises(ValidationError) as error:
+        Settings(database_url="mysql://test:synthetic-password@localhost/test")
+
+    assert "synthetic-password" not in str(error.value)
+
+
+def test_worker_timeout_must_allow_for_heartbeat_updates() -> None:
+    with pytest.raises(ValidationError):
+        Settings(worker_heartbeat_seconds=10, worker_stalled_seconds=20)

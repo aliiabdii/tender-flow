@@ -1,0 +1,56 @@
+x-application: &application
+  build:
+    context: .
+    dockerfile_inline: |
+      FROM python:3.12-slim
+      WORKDIR /app
+      COPY pyproject.toml requirements-dev.lock ./
+      COPY src ./src
+      RUN pip install --no-cache-dir -c requirements-dev.lock .
+      COPY alembic.ini ./
+      COPY alembic ./alembic
+  environment:
+    TENDERFLOW_DATABASE_URL: ${TENDERFLOW_DATABASE_URL:?Set the PostgreSQL SQLAlchemy URL}
+  depends_on:
+    postgres:
+      condition: service_healthy
+  mem_limit: 512m
+  cpus: 1
+  pids_limit: 128
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: tenderflow
+      POSTGRES_DB: tenderflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a local PostgreSQL password}
+    ports:
+      - "127.0.0.1::5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tenderflow -d tenderflow"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    mem_limit: 512m
+    cpus: 1
+    pids_limit: 128
+
+  worker:
+    <<: *application
+    command: ["python", "-m", "tenderflow.workers.app"]
+
+  app-migrate:
+    <<: *application
+    profiles: ["tools"]
+    command: ["alembic", "upgrade", "head"]
+
+  queue-init:
+    <<: *application
+    profiles: ["tools"]
+    command: ["python", "-m", "tenderflow.workers.app", "init-schema"]
+
+volumes:
+  postgres-data:

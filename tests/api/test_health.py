@@ -15,6 +15,13 @@ def test_liveness(client: TestClient) -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_readiness_without_database_configuration(client: TestClient) -> None:
+    response = client.get("/health/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {"status": "not_ready"}
+
+
 def test_app_factory_validates_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TENDERFLOW_MAX_UPLOAD_BYTES", "0")
 
