@@ -1,6 +1,7 @@
 # TenderFlow: Technical Design
 
-Status: Design approved by the user on 2026-11-15. Implementation plan pending review.
+Status: Design and implementation plan approved by the user on 2026-11-15.
+Native execution selected; implementation has not started.
 
 Business source of truth: [BUSINESS_REQUIREMENTS.md](BUSINESS_REQUIREMENTS.md).
 This document records the approved technical realization of the agreed MVP.
