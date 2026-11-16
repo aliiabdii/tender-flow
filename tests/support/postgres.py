@@ -72,6 +72,9 @@ class QueueProbe:
     def __init__(self, url, directory):
         self.settings = Settings(
             database_url=SecretStr(url),
+            local_signing_key=SecretStr(
+                "synthetic-test-signing-key-not-for-production-12345"
+            ),
             worker_concurrency=1,
             worker_heartbeat_seconds=0.1,
             worker_stalled_seconds=1,
@@ -173,7 +176,10 @@ class QueueProbe:
         }
         with path.open("w") as log:
             process = subprocess.Popen(
-                [sys.executable, str(Path(__file__).with_name("worker_probe.py"))],
+                [
+                    sys.executable,
+                    str(Path(__file__).parents[1] / "integration" / "worker_probe.py"),
+                ],
                 env=env,
                 stdout=log,
                 stderr=subprocess.STDOUT,

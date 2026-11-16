@@ -56,3 +56,16 @@ def test_unsupported_database_url_error_does_not_expose_credentials() -> None:
 def test_worker_timeout_must_allow_for_heartbeat_updates() -> None:
     with pytest.raises(ValidationError):
         Settings(worker_heartbeat_seconds=10, worker_stalled_seconds=20)
+
+
+@pytest.mark.parametrize("field", ["local_token_issuer", "local_token_audience"])
+def test_local_token_trust_identifiers_cannot_be_blank(field: str) -> None:
+    with pytest.raises(ValidationError):
+        Settings(**{field: ""})
+
+
+def test_short_local_signing_key_is_rejected_without_disclosure() -> None:
+    key = "synthetic-short-key"
+    with pytest.raises(ValidationError) as error:
+        Settings(local_signing_key=key)
+    assert key not in str(error.value)

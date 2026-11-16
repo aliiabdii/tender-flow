@@ -1,6 +1,6 @@
 from alembic import context
 from tenderflow.config import Settings
-from tenderflow.infrastructure.database.base import Base
+from tenderflow.infrastructure.database.models import Base
 from tenderflow.infrastructure.database.sessions import create_database_engine
 
 config = context.config

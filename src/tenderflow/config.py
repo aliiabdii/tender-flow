@@ -30,6 +30,32 @@ class Settings(BaseSettings):
     worker_heartbeat_seconds: PositiveFloat = 10
     worker_stalled_seconds: PositiveFloat = 30
     job_max_retries: PositiveInt = 3
+    local_signing_key: SecretStr | None = None
+    local_token_issuer: str = "urn:tenderflow:local"
+    local_token_audience: str = "urn:tenderflow:api"
+    local_access_seconds: PositiveInt = 600
+    local_refresh_seconds: PositiveInt = 604_800
+    activation_seconds: PositiveInt = 86_400
+    password_reset_seconds: PositiveInt = 3_600
+    password_min_length: PositiveInt = 15
+    password_max_length: PositiveInt = 128
+    login_window_seconds: PositiveInt = 900
+    login_max_attempts: PositiveInt = 5
+    login_ip_max_attempts: PositiveInt = 100
+
+    @field_validator("local_token_issuer", "local_token_audience")
+    @classmethod
+    def validate_token_identifier(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Local token trust identifiers must not be blank")
+        return value
+
+    @field_validator("local_signing_key")
+    @classmethod
+    def validate_signing_key(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and len(value.get_secret_value().encode()) < 32:
+            raise ValueError("Local signing key must contain at least 32 bytes")
+        return value
 
     @field_validator("database_url")
     @classmethod
@@ -49,4 +75,9 @@ class Settings(BaseSettings):
             raise ValueError("default_page_size must not exceed max_page_size")
         if self.worker_stalled_seconds <= self.worker_heartbeat_seconds * 2:
             raise ValueError("Worker timeout must exceed two heartbeat intervals")
+        if (
+            self.password_min_length > self.password_max_length
+            or self.password_max_length > 4096
+        ):
+            raise ValueError("Invalid password length policy")
         return self

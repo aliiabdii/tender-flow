@@ -9,12 +9,14 @@ description = "Backend API for AI-assisted B2B tender management"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.14,<2",
+    "argon2-cffi>=25,<26",
     "fastapi>=0.115,<1",
     "pydantic>=2,<3",
     "pydantic-settings>=2,<3",
     "procrastinate[sqlalchemy]>=3.11,<4",
     "psycopg[binary,pool]>=3.2,<4",
     "psycopg2-binary>=2.9.10,<3",
+    "pyjwt>=2.10,<3",
     "sqlalchemy>=2,<2.1",
     "uvicorn>=0.30,<1",
 ]

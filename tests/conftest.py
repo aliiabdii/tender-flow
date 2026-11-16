@@ -7,6 +7,8 @@ from fastapi.testclient import TestClient
 from tenderflow.config import Settings
 from tenderflow.main import create_app
 
+pytest_plugins = ["tests.support.postgres", "tests.support.identity"]
+
 
 @pytest.fixture(autouse=True)
 def isolated_settings_environment(monkeypatch: pytest.MonkeyPatch) -> None:
