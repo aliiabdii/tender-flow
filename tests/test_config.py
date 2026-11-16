@@ -69,3 +69,30 @@ def test_short_local_signing_key_is_rejected_without_disclosure() -> None:
     with pytest.raises(ValidationError) as error:
         Settings(local_signing_key=key)
     assert key not in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"entra_tenant_id": "11111111-1111-4111-8111-111111111111"},
+        {"entra_required_scope": "api://synthetic/access_as_user"},
+        {
+            "entra_tenant_id": "not-a-tenant",
+            "entra_audience": "33333333-3333-4333-8333-333333333333",
+            "entra_required_scope": "api://synthetic/access_as_user",
+        },
+        {
+            "entra_tenant_id": "11111111-1111-4111-8111-111111111111",
+            "entra_audience": "33333333-3333-4333-8333-333333333333",
+            "entra_required_scope": "",
+        },
+        {
+            "entra_tenant_id": "11111111-1111-4111-8111-111111111111",
+            "entra_audience": "33333333-3333-4333-8333-333333333333",
+            "entra_required_scope": "api://synthetic/access_as_user other_scope",
+        },
+    ],
+)
+def test_entra_configuration_must_be_complete_and_valid(values) -> None:
+    with pytest.raises(ValidationError):
+        Settings(**values)

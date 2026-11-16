@@ -1,4 +1,6 @@
 from typing import Self
+from urllib.parse import urlsplit
+from uuid import UUID
 
 from pydantic import (
     NonNegativeInt,
@@ -42,6 +44,30 @@ class Settings(BaseSettings):
     login_window_seconds: PositiveInt = 900
     login_max_attempts: PositiveInt = 5
     login_ip_max_attempts: PositiveInt = 100
+    entra_tenant_id: UUID | None = None
+    entra_audience: UUID | None = None
+    entra_required_scope: str | None = None
+
+    @property
+    def entra_enabled(self) -> bool:
+        return self.entra_tenant_id is not None
+
+    @field_validator("entra_required_scope")
+    @classmethod
+    def validate_entra_scope(cls, value: str | None) -> str | None:
+        if value is not None:
+            uri = urlsplit(value)
+            if (
+                uri.scheme not in {"api", "https"}
+                or not uri.netloc
+                or not uri.path.strip("/")
+                or value.endswith("/")
+                or uri.query
+                or uri.fragment
+                or any(c.isspace() or ord(c) < 33 or ord(c) > 126 for c in value)
+            ):
+                raise ValueError("Entra scope must be a full delegated API scope URI")
+        return value
 
     @field_validator("local_token_issuer", "local_token_audience")
     @classmethod
@@ -71,6 +97,17 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_page_sizes(self) -> Self:
+        entra_values = (
+            self.entra_tenant_id,
+            self.entra_audience,
+            self.entra_required_scope,
+        )
+        if any(value is not None for value in entra_values) and any(
+            value is None for value in entra_values
+        ):
+            raise ValueError(
+                "Configure the Entra tenant, API audience and delegated scope together"
+            )
         if self.default_page_size > self.max_page_size:
             raise ValueError("default_page_size must not exceed max_page_size")
         if self.worker_stalled_seconds <= self.worker_heartbeat_seconds * 2:

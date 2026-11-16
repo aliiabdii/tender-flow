@@ -33,6 +33,12 @@ class Actor:
     roles: frozenset[str]
 
 
+@dataclass(frozen=True)
+class EntraIdentity:
+    tenant_id: UUID
+    object_id: UUID
+
+
 class IdentityInput(BaseModel):
     model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
 
@@ -84,6 +90,18 @@ class UpdateUser(IdentityInput):
         ):
             raise ValueError("Supply active and/or roles with non-null values")
         return self
+
+
+class LinkEntraIdentity(IdentityInput):
+    tenant_id: UUID
+    object_id: UUID
+
+
+class EntraIdentityView(BaseModel):
+    id: UUID
+    user_id: UUID
+    tenant_id: UUID
+    object_id: UUID
 
 
 class UserView(BaseModel):

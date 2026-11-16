@@ -13,6 +13,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from tenderflow.config import Settings
+from tenderflow.infrastructure.auth.entra import (
+    EntraTokenValidator,
+    get_entra_validator,
+    validate_entra_access_token,
+)
 from tenderflow.infrastructure.auth.local import (
     decode_access_token,
     hash_password,
@@ -23,6 +28,7 @@ from tenderflow.infrastructure.auth.local import (
 )
 from tenderflow.infrastructure.database.models.identity import (
     ActivationToken,
+    ExternalIdentity,
     LocalCredential,
     LoginAttemptWindow,
     RefreshSession,
@@ -33,6 +39,8 @@ from tenderflow.infrastructure.database.sessions import get_engine, session_scop
 from tenderflow.schemas.identity import (
     ActivationSecret,
     Actor,
+    EntraIdentityView,
+    LinkEntraIdentity,
     ProvisionUser,
     TokenPair,
     UpdateUser,
@@ -48,6 +56,7 @@ from tenderflow.services.errors import ServiceError
 class IdentityRuntime:
     engine: Engine
     settings: Settings
+    entra_validator: EntraTokenValidator | None = None
 
 
 def _runtime(runtime: IdentityRuntime | None) -> IdentityRuntime:
@@ -442,6 +451,31 @@ def logout_local(*, refresh_token: str, runtime: IdentityRuntime | None = None) 
 
 def get_actor(*, bearer_token: str, runtime: IdentityRuntime | None = None) -> Actor:
     runtime = _runtime(runtime)
+    try:
+        algorithm = jwt.get_unverified_header(bearer_token).get("alg")
+    except jwt.PyJWTError:
+        raise ServiceError("invalid_credentials") from None
+    if algorithm == "RS256" and runtime.settings.entra_enabled:
+        identity = validate_entra_access_token(
+            token=bearer_token,
+            validator=runtime.entra_validator or get_entra_validator(runtime.settings),
+        )
+        with session_scope(engine=runtime.engine) as session:
+            user = session.scalar(
+                select(User)
+                .join(ExternalIdentity, ExternalIdentity.user_id == User.id)
+                .where(
+                    ExternalIdentity.provider == "entra",
+                    ExternalIdentity.tenant_id == identity.tenant_id,
+                    ExternalIdentity.object_id == identity.object_id,
+                    User.active.is_(True),
+                )
+            )
+            if user is None:
+                raise ServiceError("invalid_credentials")
+            return Actor(user.id, frozenset(role.role for role in user.roles))
+    if algorithm != "HS256":
+        raise ServiceError("invalid_credentials")
     _require_signing_key(runtime.settings)
     try:
         claims = decode_access_token(settings=runtime.settings, token=bearer_token)
@@ -529,3 +563,88 @@ def reset_local_password(
             },
         )
         return token
+
+
+def link_entra_identity(
+    *,
+    actor: Actor,
+    user_id: UUID,
+    tenant_id: str,
+    object_id: str,
+    runtime: IdentityRuntime | None = None,
+) -> EntraIdentityView:
+    runtime = _runtime(runtime)
+    command = LinkEntraIdentity(tenant_id=tenant_id, object_id=object_id)
+    if not runtime.settings.entra_enabled:
+        raise ServiceError("authentication_unavailable")
+    if command.tenant_id != runtime.settings.entra_tenant_id:
+        raise ServiceError("invalid_identity_link")
+    try:
+        with session_scope(engine=runtime.engine) as session:
+            _admin_users(session, actor, user_id)
+            identity = ExternalIdentity(
+                user_id=user_id,
+                tenant_id=command.tenant_id,
+                object_id=command.object_id,
+            )
+            session.add(identity)
+            session.flush()
+            write_audit(
+                session=session,
+                actor=actor,
+                action="user.entra_linked",
+                entity_id=user_id,
+                metadata={
+                    "external_identity_id": str(identity.id),
+                    "tenant_id": str(identity.tenant_id),
+                    "object_id": str(identity.object_id),
+                },
+            )
+            return EntraIdentityView(
+                id=identity.id,
+                user_id=user_id,
+                tenant_id=identity.tenant_id,
+                object_id=identity.object_id,
+            )
+    except IntegrityError as error:
+        if (
+            getattr(getattr(error.orig, "diag", None), "constraint_name", None)
+            == "uq_external_identity_subject"
+        ):
+            raise ServiceError("identity_already_linked") from None
+        raise
+
+
+def unlink_entra_identity(
+    *,
+    actor: Actor,
+    user_id: UUID,
+    identity_id: UUID,
+    runtime: IdentityRuntime | None = None,
+) -> None:
+    runtime = _runtime(runtime)
+    with session_scope(engine=runtime.engine) as session:
+        _admin_users(session, actor, user_id)
+        identity = session.scalar(
+            select(ExternalIdentity)
+            .where(
+                ExternalIdentity.id == identity_id,
+                ExternalIdentity.user_id == user_id,
+                ExternalIdentity.provider == "entra",
+            )
+            .with_for_update()
+        )
+        if identity is None:
+            raise ServiceError("identity_not_found")
+        write_audit(
+            session=session,
+            actor=actor,
+            action="user.entra_unlinked",
+            entity_id=user_id,
+            metadata={
+                "external_identity_id": str(identity.id),
+                "tenant_id": str(identity.tenant_id),
+                "object_id": str(identity.object_id),
+            },
+        )
+        session.delete(identity)

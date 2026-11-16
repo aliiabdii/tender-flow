@@ -20,13 +20,17 @@ asgiref==3.13.0
 attrs==26.1.0
     # via procrastinate
 cffi==2.1.1
-    # via argon2-cffi-bindings
+    # via
+    #   argon2-cffi-bindings
+    #   cryptography
 click==8.5.1
     # via uvicorn
 coverage==7.17.3
     # via pytest-cov
 croniter==7.0.0
     # via procrastinate
+cryptography==50.0.2
+    # via pyjwt
 fastapi==0.163.1
     # via tenderflow (pyproject.toml)
 greenlet==3.5.6

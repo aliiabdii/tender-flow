@@ -7,7 +7,11 @@ from fastapi.testclient import TestClient
 from tenderflow.config import Settings
 from tenderflow.main import create_app
 
-pytest_plugins = ["tests.support.postgres", "tests.support.identity"]
+pytest_plugins = [
+    "tests.support.postgres",
+    "tests.support.identity",
+    "tests.support.entra",
+]
 
 
 @pytest.fixture(autouse=True)

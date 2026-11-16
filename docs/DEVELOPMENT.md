@@ -43,6 +43,7 @@ tables in Alembic revisions. The installed release lists its migration scripts:
 New application migrations must also update `APPLICATION_SCHEMA_REVISION`
 in `infrastructure/database/base.py`; readiness rejects a different revision.
 Revision `0002` adds local identities, sessions, throttling and audit records.
+Revision `0003` adds explicitly linked external identities.
 
 To run the API on the host, override only that command's URL using the
 loopback port assigned by Compose:
@@ -53,8 +54,9 @@ TENDERFLOW_DATABASE_URL="postgresql+psycopg2://tenderflow:${POSTGRES_PASSWORD}@$
 ```
 
 `GET /health/live` does not access the database. `GET /health/ready` returns
-503 until both application and queue schemas are accessible and a local
-signing key is configured. Liveness remains independent of authentication setup.
+503 until both application and queue schemas are accessible and at least one
+authentication provider is configured. Liveness remains independent of
+authentication setup.
 
 Worker concurrency defaults to 4, with bounded pools. Heartbeats default to
 10 seconds and the stalled-worker timeout to 30 seconds; the timeout must
@@ -135,6 +137,85 @@ issuer and audience settings; they do not establish trust in external tokens.
 Keep tokens, passwords and signing keys out of logs. Expired session, activation
 and throttle rows currently require an operational retention policy; automated
 cleanup is not part of this identity feature.
+
+## Microsoft Entra accounts
+
+Entra authentication is optional and disabled by default. This implementation
+accepts **single-tenant Microsoft public-cloud v2.0 delegated API access tokens
+signed with RS256**, not v1.0, Microsoft Graph, ID tokens, or app-only tokens.
+No live tenant or application registrations are created by the tests.
+
+An administrator must first register the TenderFlow API in Entra, set
+`api.requestedAccessTokenVersion` to `2`, expose a delegated API scope, and
+register a **separate public client** authorized to request it. Configure all
+three settings together, using the real registration values:
+
+```bash
+export TENDERFLOW_ENTRA_TENANT_ID="<tenant-directory-UUID>"
+export TENDERFLOW_ENTRA_AUDIENCE="<TenderFlow-API-application-client-UUID>"
+export TENDERFLOW_ENTRA_REQUIRED_SCOPE="api://<TenderFlow-API-application-client-UUID>/access_as_user"
+```
+
+`ENTRA_AUDIENCE` is the API registration's client ID, not the public client's
+ID or an App ID URI. `ENTRA_REQUIRED_SCOPE` is the **full** scope URI copied
+from "Expose an API"; custom HTTPS App ID URIs are also supported. Validation
+requires the final scope name (for example `access_as_user`) as a whole value
+in the signed `scp` claim. No scopes or application roles in the token grant
+TenderFlow roles: administrators manage those on the internal user.
+
+The issuer and JWKS URL are derived only from the configured tenant:
+`https://login.microsoftonline.com/<tenant>/v2.0` and
+`https://login.microsoftonline.com/<tenant>/discovery/v2.0/keys`.
+Token-provided issuers, `jku`, or other key URLs never select an endpoint.
+Keys are fetched lazily with a three-second timeout and cached for five minutes.
+Unknown key IDs can trigger a refresh at most once per 30 seconds; a newly
+rotated key may be rejected temporarily during that cooldown. Individual keys
+are not cached indefinitely. An unavailable key service returns a safe `503`
+when a refresh is needed; unexpired cached keys remain usable.
+Failed fetches also have a 30-second retry backoff, preventing repeated
+outage timeouts from blocking cached-key authentication.
+Neither app startup nor liveness performs key discovery.
+
+Provision the internal user first (optionally with `local_access: false`), then
+link the tenant's user object ID:
+
+```text
+POST /api/v1/admin/users/{user_id}/entra-identities
+{"tenant_id": "<configured-tenant-UUID>", "object_id": "<user-object-UUID>"}
+```
+
+The authorized administrator receives `201` with the link's `id`, `user_id`,
+`tenant_id`, and `object_id`. Save the link ID for removal through
+`DELETE /api/v1/admin/users/{user_id}/entra-identities/{identity_id}` (`204`).
+The provider/tenant/object tuple is unique across internal users. Links and
+unlinks are audited in the same transaction. Use the user's **Object ID** in
+the configured tenant (including the tenant-local object for a guest), not an
+email, display name, application ID, or object ID from another tenant.
+Unknown identities are rejected; there is no JIT provisioning or email linking.
+
+Clients obtain API access tokens through Microsoft's supported
+authorization-code flow with PKCE and consent for the configured scope. Send
+the **access token**, not an ID token, as `Authorization: Bearer ...`.
+Token acquisition, Microsoft refresh tokens, and interactive sign-in belong
+to the client; TenderFlow does not provide an Entra password exchange or login
+frontend. `/docs` advertises the tenant-specific OAuth2 authorization-code flow
+with PKCE enabled. For Swagger's Authorize dialog, enter the separate public
+client's ID, leave the client secret empty, and configure its permitted redirect
+URI to the API's `/docs/oauth2-redirect` URL in Entra.
+
+Local and linked Entra logins resolve to the same canonical internal user ID.
+Disabling a user, changing roles, or deleting a link is reflected on subsequent
+requests even if an Entra token has not expired. Unlinking does not revoke the
+user's separate local sessions; a local password reset/logout does not revoke
+Microsoft-issued tokens. Disable the internal user to block both methods.
+
+Entra can run without a local signing key, but initial administrator creation
+still uses the bootstrap/activation workflow described above. Keep local auth
+configured until an existing administrator has a verified working Entra link;
+removing the local key too early can lock out all administrators.
+Restart the API when changing provider settings. Pass the Entra environment
+variables explicitly with `docker compose run -e ...` for container commands;
+the development Compose definition forwards only its database URL by default.
 
 ## Tests
 

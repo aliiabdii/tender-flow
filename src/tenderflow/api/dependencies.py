@@ -9,12 +9,16 @@ _bearer = HTTPBearer(auto_error=False)
 
 
 def get_identity_runtime(request: Request) -> IdentityRuntime:
-    if (
-        request.app.state.engine is None
-        or request.app.state.settings.local_signing_key is None
+    if request.app.state.engine is None or (
+        request.app.state.settings.local_signing_key is None
+        and not request.app.state.settings.entra_enabled
     ):
         raise ServiceError("authentication_unavailable")
-    return IdentityRuntime(request.app.state.engine, request.app.state.settings)
+    return IdentityRuntime(
+        request.app.state.engine,
+        request.app.state.settings,
+        request.app.state.entra_validator,
+    )
 
 
 def current_actor(

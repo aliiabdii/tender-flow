@@ -35,6 +35,9 @@ def write_audit(
             "run_id",
             "document_id",
             "line_id",
+            "tenant_id",
+            "object_id",
+            "external_identity_id",
         }:
             try:
                 UUID(value)

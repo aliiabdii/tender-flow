@@ -14,6 +14,16 @@ _ERRORS = {
     "invalid_request": (422, "Request validation failed"),
     "rate_limited": (429, "Too many authentication attempts"),
     "authentication_unavailable": (503, "Authentication is not configured"),
+    "identity_provider_unavailable": (
+        503,
+        "Identity provider is temporarily unavailable",
+    ),
+    "invalid_identity_link": (
+        422,
+        "Identity must belong to the configured Entra tenant",
+    ),
+    "identity_already_linked": (409, "External identity is already linked"),
+    "identity_not_found": (404, "External identity not found"),
 }
 
 

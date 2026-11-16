@@ -1,11 +1,13 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 
 from tenderflow.api.dependencies import get_identity_runtime, require_roles
 from tenderflow.schemas.identity import (
     ActivationSecret,
     Actor,
+    EntraIdentityView,
+    LinkEntraIdentity,
     ProvisionUser,
     UpdateUser,
     UserProvisioned,
@@ -13,8 +15,10 @@ from tenderflow.schemas.identity import (
 )
 from tenderflow.services.identity import (
     IdentityRuntime,
+    link_entra_identity,
     provision_user,
     reset_local_password,
+    unlink_entra_identity,
     update_user,
 )
 
@@ -50,3 +54,34 @@ def reset_password(
     runtime: IdentityRuntime = Depends(get_identity_runtime),
 ) -> ActivationSecret:
     return reset_local_password(actor=actor, user_id=user_id, runtime=runtime)
+
+
+@router.post(
+    "/{user_id}/entra-identities", response_model=EntraIdentityView, status_code=201
+)
+def link_entra(
+    user_id: UUID,
+    command: LinkEntraIdentity,
+    actor: Actor = Depends(_administrator),
+    runtime: IdentityRuntime = Depends(get_identity_runtime),
+) -> EntraIdentityView:
+    return link_entra_identity(
+        actor=actor,
+        user_id=user_id,
+        tenant_id=str(command.tenant_id),
+        object_id=str(command.object_id),
+        runtime=runtime,
+    )
+
+
+@router.delete("/{user_id}/entra-identities/{identity_id}", status_code=204)
+def unlink_entra(
+    user_id: UUID,
+    identity_id: UUID,
+    actor: Actor = Depends(_administrator),
+    runtime: IdentityRuntime = Depends(get_identity_runtime),
+) -> Response:
+    unlink_entra_identity(
+        actor=actor, user_id=user_id, identity_id=identity_id, runtime=runtime
+    )
+    return Response(status_code=204)
