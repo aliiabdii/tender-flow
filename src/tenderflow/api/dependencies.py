@@ -1,6 +1,10 @@
+from collections.abc import Iterator
+
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session
 
+from tenderflow.infrastructure.database.sessions import session_scope
 from tenderflow.schemas.identity import Actor
 from tenderflow.services.errors import ServiceError
 from tenderflow.services.identity import IdentityRuntime, get_actor
@@ -37,3 +41,10 @@ def require_roles(*roles: str):
         return actor
 
     return authorize
+
+
+def database_session(
+    runtime: IdentityRuntime = Depends(get_identity_runtime),
+) -> Iterator[Session]:
+    with session_scope(engine=runtime.engine) as session:
+        yield session

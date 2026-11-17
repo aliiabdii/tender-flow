@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     max_lines_per_tender: PositiveInt = 5_000
     default_page_size: PositiveInt = 100
     max_page_size: PositiveInt = 200
+    idempotency_seconds: PositiveInt = 86_400
     database_url: SecretStr | None = None
     database_pool_size: PositiveInt = 5
     database_max_overflow: NonNegativeInt = 5

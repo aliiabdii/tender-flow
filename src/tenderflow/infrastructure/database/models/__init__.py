@@ -9,6 +9,12 @@ from tenderflow.infrastructure.database.models.identity import (
     User,
     UserRole,
 )
+from tenderflow.infrastructure.database.models.tenders import (
+    Buyer,
+    IdempotencyKey,
+    Tender,
+    TenderContributor,
+)
 
 __all__ = [
     "Base",
@@ -20,4 +26,8 @@ __all__ = [
     "RefreshSession",
     "User",
     "UserRole",
+    "Buyer",
+    "Tender",
+    "TenderContributor",
+    "IdempotencyKey",
 ]

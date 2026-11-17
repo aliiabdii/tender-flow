@@ -11,6 +11,7 @@ pytest_plugins = [
     "tests.support.postgres",
     "tests.support.identity",
     "tests.support.entra",
+    "tests.support.tenders",
 ]
 
 

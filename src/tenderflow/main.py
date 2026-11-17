@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 
-from tenderflow.api import admin, auth
+from tenderflow.api import admin, auth, buyers, tenders
 from tenderflow.api.problems import register_problem_handlers
 from tenderflow.config import Settings
 from tenderflow.infrastructure.auth.entra import EntraTokenValidator
@@ -43,6 +43,8 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     register_problem_handlers(app)
     app.include_router(auth.router)
     app.include_router(admin.router)
+    app.include_router(buyers.router)
+    app.include_router(tenders.router)
 
     @app.middleware("http")
     async def prevent_authentication_caching(request, call_next):

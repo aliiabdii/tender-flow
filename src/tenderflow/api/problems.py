@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from tenderflow.schemas.problems import Problem
 from tenderflow.services.errors import ServiceError
 
 _ERRORS = {
@@ -24,6 +25,15 @@ _ERRORS = {
     ),
     "identity_already_linked": (409, "External identity is already linked"),
     "identity_not_found": (404, "External identity not found"),
+    "buyer_not_found": (404, "Buyer not found"),
+    "tender_not_found": (404, "Tender not found"),
+    "precondition_required": (428, "A current If-Match precondition is required"),
+    "precondition_failed": (412, "Resource version does not match"),
+    "idempotency_conflict": (
+        409,
+        "Idempotency key was already used for a different request",
+    ),
+    "invalid_cursor": (422, "Invalid page cursor"),
 }
 
 
@@ -35,12 +45,9 @@ def _response(code: str, retry_after: int | None = None) -> JSONResponse:
     if retry_after is not None:
         headers["Retry-After"] = str(retry_after)
     return JSONResponse(
-        {
-            "type": f"urn:tenderflow:problem:{code}",
-            "title": title,
-            "status": status,
-            "code": code,
-        },
+        Problem(
+            type=f"urn:tenderflow:problem:{code}", title=title, status=status, code=code
+        ).model_dump(),
         status_code=status,
         media_type="application/problem+json",
         headers=headers,

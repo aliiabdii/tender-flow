@@ -44,6 +44,8 @@ New application migrations must also update `APPLICATION_SCHEMA_REVISION`
 in `infrastructure/database/base.py`; readiness rejects a different revision.
 Revision `0002` adds local identities, sessions, throttling and audit records.
 Revision `0003` adds explicitly linked external identities.
+Revision `0004` adds buyers, versioned tenders, contributor history and
+transactional idempotency records.
 
 To run the API on the host, override only that command's URL using the
 loopback port assigned by Compose:
@@ -216,6 +218,63 @@ removing the local key too early can lock out all administrators.
 Restart the API when changing provider settings. Pass the Entra environment
 variables explicitly with `docker compose run -e ...` for container commands;
 the development Compose definition forwards only its database URL by default.
+
+## Buyers and tender registration
+
+Managers (`tender_manager`) create and edit buyers and tenders. Managers and
+approvers can read them and their tender audit history; `admin` alone grants
+no business permissions. Business services recheck current account status and
+roles inside the database transaction.
+
+Use `POST /api/v1/buyers` with `name` and string `customer_number`, then
+`POST /api/v1/tenders` with `buyer_id`, `title`, and optionally
+`pricing_customer_number`, `submission_deadline`, and `supersedes_tender_id`.
+Customer numbers remain strings, including leading zeroes. A tender snapshots
+the buyer's customer number unless explicitly overridden; later buyer edits
+never rewrite existing snapshots.
+
+Create and item-read responses include `ETag`; creation also returns `Location`.
+Send the item's current, quoted ETag as `If-Match` when using
+`PATCH /api/v1/buyers/{id}` or `PATCH /api/v1/tenders/{id}`. Missing preconditions
+return `428`; stale, cross-resource, weak, wildcard, or multiple validators
+return `412`. Buyer patches accept only `name` and `customer_number`; tender
+patches accept only `title`, `pricing_customer_number`, and
+`submission_deadline`. Empty patches and null values other than a cleared
+deadline return `422`. Every accepted patch advances the item's revision,
+including same-value changes. Tender patches advance preparation and content
+versions together without changing the source revision.
+Tender ETags also reflect whether the deadline warning currently applies.
+Crossing the deadline changes that representation validator without a content
+edit; refresh the item and retry a `412` with its new ETag.
+
+Deadlines require a timezone offset and are returned in UTC. Passed deadlines produce the
+`submission_deadline_passed` warning, not an edit block. An amendment creates
+a new draft tender linked to an existing tender, with all versions starting
+at one and no automatic preparation copying. The link cannot be patched:
+API/service callers cannot rewrite history or introduce amendment cycles.
+Direct SQL access remains an operational trust boundary; the database separately
+rejects self-links.
+
+`POST /api/v1/tenders` optionally accepts `Idempotency-Key`: 1-128 visible ASCII
+characters without spaces. Keys are scoped to the current internal user and
+command. Reusing an unexpired key with the same validated request returns the
+same resource; a changed request returns `409`. A replay returns the resource's
+current representation, not a byte-for-byte copy of the original response.
+The key record, tender, contributor and audit writes commit or roll back
+together, before a success response is sent. Only hashes of keys and requests
+are stored. Retention defaults to 24 hours, configurable through
+`TENDERFLOW_IDEMPOTENCY_SECONDS`; expiry permits a new result. Expired records
+are replaced on reuse; bulk retention cleanup remains operational.
+
+`GET /api/v1/buyers`, `GET /api/v1/tenders`, and
+`GET /api/v1/tenders/{id}/audit-events` return `items` and `next_cursor`.
+Pass `limit` (default 100, maximum 200) and the opaque `cursor` to continue.
+Ordering uses immutable creation time plus ID, including timestamp ties.
+Cursors are endpoint-specific and are not authorization tokens or a frozen
+snapshot; concurrent inserts after the marker may appear on later pages.
+Creation and preparation edits retain unique contributor membership, while
+reads do not contribute. Audit responses project only validated identifier,
+version, role and state metadata, never titles, customer numbers or raw requests.
 
 ## Tests
 
