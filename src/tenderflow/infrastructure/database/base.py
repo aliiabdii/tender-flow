@@ -1,7 +1,8 @@
 from sqlalchemy.orm import DeclarativeBase
 
 # Advance with application migrations; queue migrations remain library-owned.
-APPLICATION_SCHEMA_REVISION = "0005"
+
+APPLICATION_SCHEMA_REVISION = "0006"
 
 
 class Base(DeclarativeBase):

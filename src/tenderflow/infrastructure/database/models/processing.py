@@ -6,6 +6,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -22,6 +23,7 @@ from tenderflow.infrastructure.database.base import Base
 class ProcessingRun(Base):
     __tablename__ = "processing_runs"
     __table_args__ = (
+        UniqueConstraint("id", "tender_id", name="uq_processing_run_tender"),
         CheckConstraint(
             "kind IN ('extraction','matching','lookup','pricing','export')",
             name="ck_processing_run_kind",
@@ -59,6 +61,16 @@ class ProcessingRun(Base):
 class ProcessingItem(Base):
     __tablename__ = "processing_items"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["run_id", "tender_id"],
+            ["processing_runs.id", "processing_runs.tender_id"],
+            name="fk_processing_item_run_tender",
+        ),
+        ForeignKeyConstraint(
+            ["document_id", "tender_id"],
+            ["documents.id", "documents.tender_id"],
+            name="fk_processing_item_document_tender",
+        ),
         UniqueConstraint("run_id", "key", name="uq_processing_item_key"),
         CheckConstraint(
             "state IN ('queued','running','succeeded','failed','superseded')",
@@ -79,6 +91,8 @@ class ProcessingItem(Base):
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     run_id: Mapped[UUID] = mapped_column(ForeignKey("processing_runs.id"), index=True)
+    tender_id: Mapped[UUID] = mapped_column()
+    document_id: Mapped[UUID | None] = mapped_column(index=True)
     key: Mapped[str] = mapped_column(String(128))
     state: Mapped[str] = mapped_column(String(32), default="queued")
     expected_inputs: Mapped[dict] = mapped_column(JSONB)

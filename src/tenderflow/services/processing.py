@@ -8,6 +8,7 @@ from sqlalchemy import func, select, text, update
 from sqlalchemy.orm import Session
 
 from tenderflow.infrastructure.database.models import (
+    Document,
     ProcessingItem,
     ProcessingRun,
     Tender,
@@ -178,21 +179,30 @@ def enqueue_item(
     task_name: str,
     expected_inputs: InputVersions | None = None,
     retry_of_item_id: UUID | None = None,
+    document_id: UUID | None = None,
 ) -> ProcessingItem:
     if not re.fullmatch(r"[a-zA-Z0-9_.:-]{1,128}", key) or not re.fullmatch(
         r"[a-zA-Z][a-zA-Z0-9_.]{0,127}", task_name
     ):
         raise ServiceError("invalid_request")
     run, tender = _lock_run(session, run_id)
+    if document_id is not None:
+        document = session.get(Document, document_id)
+        if document is None or document.tender_id != tender.id:
+            raise ServiceError("invalid_request")
     existing = session.scalar(
         select(ProcessingItem).where(
             ProcessingItem.run_id == run.id, ProcessingItem.key == key
         )
     )
     if existing is not None:
-        if existing.task_name != task_name or (
-            expected_inputs is not None
-            and existing.expected_inputs != expected_inputs.model_dump()
+        if (
+            existing.task_name != task_name
+            or (
+                expected_inputs is not None
+                and existing.expected_inputs != expected_inputs.model_dump()
+            )
+            or existing.document_id != document_id
         ):
             raise ServiceError("processing_conflict")
         return existing
@@ -201,6 +211,8 @@ def enqueue_item(
         raise ServiceError("processing_conflict")
     item = ProcessingItem(
         run_id=run.id,
+        tender_id=tender.id,
+        document_id=document_id,
         key=key,
         task_name=task_name,
         expected_inputs=inputs.model_dump(),
@@ -353,6 +365,7 @@ def retry_failed_items(
                 task_name=item.task_name,
                 expected_inputs=InputVersions.model_validate(item.expected_inputs),
                 retry_of_item_id=item.id,
+                document_id=item.document_id,
             )
         return retry.id
 

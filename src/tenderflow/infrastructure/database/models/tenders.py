@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -58,6 +59,9 @@ class Tender(Base):
     )
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"), index=True)
     status: Mapped[str] = mapped_column(String(32), default="draft")
+    sources_frozen: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
     source_revision: Mapped[int] = mapped_column(Integer, default=1)
     preparation_version: Mapped[int] = mapped_column(Integer, default=1)
     content_revision: Mapped[int] = mapped_column(Integer, default=1)

@@ -19,10 +19,23 @@ asgiref==3.13.0
     # via procrastinate
 attrs==26.1.0
     # via procrastinate
+boto3==1.44.7
+    # via
+    #   tenderflow (pyproject.toml)
+    #   moto
+botocore==1.44.7
+    # via
+    #   boto3
+    #   moto
+    #   s3transfer
+certifi==2026.10.23
+    # via requests
 cffi==2.1.1
     # via
     #   argon2-cffi-bindings
     #   cryptography
+charset-normalizer==3.5.2
+    # via requests
 click==8.5.1
     # via uvicorn
 coverage==7.17.3
@@ -30,7 +43,11 @@ coverage==7.17.3
 croniter==7.0.0
     # via procrastinate
 cryptography==50.0.2
-    # via pyjwt
+    # via
+    #   moto
+    #   pyjwt
+defusedxml==0.7.1
+    # via tenderflow (pyproject.toml)
 fastapi==0.163.1
     # via tenderflow (pyproject.toml)
 greenlet==3.5.6
@@ -47,12 +64,21 @@ idna==3.20
     # via
     #   anyio
     #   httpx2
+    #   requests
 iniconfig==2.3.1
     # via pytest
+jmespath==1.1.0
+    # via
+    #   boto3
+    #   botocore
 mako==1.4.3
     # via alembic
 markupsafe==3.0.4
-    # via mako
+    # via
+    #   mako
+    #   werkzeug
+moto==5.2.5
+    # via tenderflow (pyproject.toml)
 opentelemetry-api==1.45.2
     # via fastapi
 packaging==26.3
@@ -75,6 +101,8 @@ psycopg-pool==3.3.3
     # via psycopg
 psycopg2-binary==2.9.13
     # via tenderflow (pyproject.toml)
+py-partiql-parser==0.6.3
+    # via moto
 pycparser==3.12
     # via cffi
 pydantic==2.14.3
@@ -90,20 +118,39 @@ pygments==2.21.0
     # via pytest
 pyjwt==2.15.1
     # via tenderflow (pyproject.toml)
+pypdf==6.21.4
+    # via tenderflow (pyproject.toml)
 pytest==9.2.0
     # via
     #   tenderflow (pyproject.toml)
     #   pytest-cov
 pytest-cov==7.1.0
     # via tenderflow (pyproject.toml)
-python-dateutil==4.0.0
+python-dateutil==2.9.0.post0
     # via
+    #   botocore
     #   croniter
     #   procrastinate
 python-dotenv==1.2.4
     # via pydantic-settings
+python-multipart==0.0.34
+    # via tenderflow (pyproject.toml)
+pyyaml==6.0.3
+    # via
+    #   moto
+    #   responses
+requests==2.34.2
+    # via
+    #   moto
+    #   responses
+responses==0.26.3
+    # via moto
 ruff==0.17.5
     # via tenderflow (pyproject.toml)
+s3transfer==0.19.3
+    # via boto3
+six==1.17.0
+    # via python-dateutil
 sqlalchemy==2.0.57
     # via
     #   tenderflow (pyproject.toml)
@@ -132,7 +179,14 @@ typing-inspection==0.4.5
     #   fastapi
     #   pydantic
     #   pydantic-settings
-tzdata==2026.6
-    # via python-dateutil
+urllib3==2.8.0
+    # via
+    #   botocore
+    #   requests
+    #   responses
 uvicorn==0.54.0
     # via tenderflow (pyproject.toml)
+werkzeug==3.1.9
+    # via moto
+xmltodict==1.0.4
+    # via moto

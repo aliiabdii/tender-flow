@@ -47,6 +47,8 @@ Revision `0003` adds explicitly linked external identities.
 Revision `0004` adds buyers, versioned tenders, contributor history and
 transactional idempotency records.
 Revision `0005` adds durable processing runs and items.
+Revision `0006` adds private source documents, source freezing and document-owned
+processing items; existing processing-item tender ownership is backfilled.
 
 To run the API on the host, override only that command's URL using the
 loopback port assigned by Compose:
@@ -332,6 +334,90 @@ also checks preparation version, never aggregate content revision.
 Concrete adapters must include all command inputs in their idempotency hash,
 refine replacement scope for independent line work, and apply actual offer
 changes/revision increments atomically only when publication is accepted.
+
+## Private source documents
+
+Configure a private S3 bucket through `TENDERFLOW_S3_BUCKET` and
+`TENDERFLOW_S3_REGION` (default `us-east-1`). In AWS, use the workload IAM role;
+no application credentials are required in settings. Outside AWS, configure
+`TENDERFLOW_S3_ACCESS_KEY` and `TENDERFLOW_S3_SECRET_KEY` together and optionally
+`TENDERFLOW_S3_ENDPOINT_URL`. Keep secrets outside version control. Sources use
+random `sources/<tender-id>/<object-id>` keys, conditional no-overwrite writes
+and AES256 server-side encryption. Keys are not public URLs or exposed in API
+responses. Bucket creation, public-access blocking and least-privilege IAM are
+operator responsibilities; this feature does not provision real AWS resources.
+
+For local testing, Compose supplies **LocalStack S3** in the `storage` profile,
+bound only to an OS-assigned loopback port with no mounted Docker socket:
+
+```bash
+docker compose up -d object-storage
+docker compose port object-storage 4566
+```
+
+Set the host endpoint to `http://<reported-loopback-address>`. Container clients
+use `http://object-storage:4566`. LocalStack uses synthetic credentials (any
+nonempty test values); do not use production credentials or confidential files.
+Create the local bucket through the SDK before uploading. The Compose service
+does not forward S3 settings automatically; pass them explicitly with `-e` for
+application container commands. MinIO images were unavailable during validation;
+the pinned LocalStack service is the verified local alternative.
+
+Managers upload one multipart `file` using
+`POST /api/v1/tenders/{id}/documents` with the tender's current `If-Match`.
+Missing/stale preconditions return `428`/`412`. Default limits are **25 MiB per
+file** and **20 documents per tender**, configurable through existing settings.
+The request stream is also capped before multipart spooling (file limit plus
+64 KiB framing allowance), including chunked requests. Files are validated and
+spooled without holding a DB transaction during S3 calls; publication rechecks
+current permissions, revision, document count and source freeze under the lock.
+Storage/database failures never publish an incomplete source or enqueue work.
+After a publication error, cleanup takes a fresh tender lock to wait for any
+uncertain commit and deletes only that specific key if no committed document
+references it. A lost commit acknowledgement can return `500` despite successful
+publication; refresh the source list before retrying. If database verification
+or compensation fails, the original is retained and its random key logged for
+operator reconciliation. Crashes
+between object write and DB commit can likewise leave unpublished orphans.
+Operational cleanup must compare keys with committed source metadata, never
+delete a bucket/prefix indiscriminately.
+
+Creation returns original filename, validated format, byte size, SHA256 checksum,
+source revision and an authorized download `Location`. Uploads advance source,
+preparation and content versions and record the manager's contribution.
+Duplicates are separate sources, not silently merged. Upload does not start
+extraction; that remains a separate explicit command.
+
+`GET /api/v1/tenders/{id}/documents` is cursor-paginated.
+`GET /api/v1/documents/{id}/download` streams unchanged original bytes after
+authorization, as an attachment with `no-store` and `nosniff`. Managers and
+approvers can read; administrators without a business role cannot. Missing
+storage objects return a safe `503` before sending success headers.
+Streams close on completion or disconnect, including failures sending headers.
+Clients cannot PATCH document metadata or choose private keys.
+
+Initial formats are UTF-8 CSV, XLSX, DOCX and text PDFs. Legacy/macro-enabled
+formats, encrypted files, image-only PDFs, malformed CSV/containers and unsafe
+archive paths are rejected with `415`. XML entity expansion is disabled;
+OOXML archives are bounded to 2,000 members, 10 MiB per member and 50 MiB total
+expanded size, and PDFs to 500 pages and 50 MiB of expanded page content.
+PDF suitability checks run in a disposable Linux subprocess with a 256 MiB
+address-space limit, five CPU seconds and a ten-second wall timeout; resource
+limit failures safely reject the source with `415` rather than exhausting the
+API process. Validation never executes macros or
+evaluates formulas. Semantic extraction, source coordinates and deeper
+worksheet/relationship validation belong to the parser feature.
+
+Known generated artifacts are rejected by provenance markers: CSV first line
+`# tenderflow-generated-artifact`, OOXML custom property
+`TenderFlowGeneratedArtifact`, or PDF metadata `/TenderFlowGeneratedArtifact`.
+Future export producers must emit these markers and use separate output keys.
+No byte-only check can prove arbitrary file provenance after a marker is removed.
+The source-freeze helper must be called atomically when extraction first
+publishes lines in the later domain features. Once frozen, further uploads
+return `409`; source amendments use a new linked tender. Document processing
+subjects now have database-enforced tender ownership; line subject constraints
+remain for the line-model migration.
 
 ## Tests
 

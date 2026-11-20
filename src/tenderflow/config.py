@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     default_page_size: PositiveInt = 100
     max_page_size: PositiveInt = 200
     idempotency_seconds: PositiveInt = 86_400
+    s3_bucket: str | None = None
+    s3_region: str = "us-east-1"
+    s3_endpoint_url: str | None = None
+    s3_access_key: SecretStr | None = None
+    s3_secret_key: SecretStr | None = None
     database_url: SecretStr | None = None
     database_pool_size: PositiveInt = 5
     database_max_overflow: NonNegativeInt = 5
@@ -98,6 +103,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_page_sizes(self) -> Self:
+        if (self.s3_access_key is None) != (self.s3_secret_key is None):
+            raise ValueError("Configure S3 access and secret keys together")
         entra_values = (
             self.entra_tenant_id,
             self.entra_audience,

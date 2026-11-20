@@ -52,5 +52,22 @@ services:
     profiles: ["tools"]
     command: ["python", "-m", "tenderflow.workers.app", "init-schema"]
 
+  object-storage:
+    image: localstack/localstack:4.14.0
+    profiles: ["storage"]
+    environment:
+      SERVICES: s3
+      PERSISTENCE: "1"
+      DISABLE_EVENTS: "1"
+      SKIP_INFRA_DOWNLOADS: "1"
+    ports:
+      - "127.0.0.1::4566"
+    volumes:
+      - object-storage-data:/var/lib/localstack
+    mem_limit: 512m
+    cpus: 1
+    pids_limit: 128
+
 volumes:
   postgres-data:
+  object-storage-data:

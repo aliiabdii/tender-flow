@@ -4,14 +4,16 @@ from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 
-from tenderflow.api import admin, auth, buyers, processing, tenders
+from tenderflow.api import admin, auth, buyers, documents, processing, tenders
 from tenderflow.api.problems import register_problem_handlers
+from tenderflow.api.upload_limits import UploadLimits
 from tenderflow.config import Settings
 from tenderflow.infrastructure.auth.entra import EntraTokenValidator
 from tenderflow.infrastructure.database.sessions import (
     create_database_engine,
     database_is_ready,
 )
+from tenderflow.infrastructure.storage import create_object_store
 
 
 def create_app(*, settings: Settings | None = None) -> FastAPI:
@@ -36,16 +38,19 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
         swagger_ui_init_oauth={"usePkceWithAuthorizationCodeGrant": True},
     )
     app.state.settings = settings
+    app.state.object_store = create_object_store(settings)
     app.state.engine = engine
     app.state.entra_validator = (
         EntraTokenValidator(settings) if settings.entra_enabled else None
     )
     register_problem_handlers(app)
+    app.add_middleware(UploadLimits, maximum=settings.max_upload_bytes)
     app.include_router(auth.router)
     app.include_router(admin.router)
     app.include_router(buyers.router)
     app.include_router(tenders.router)
     app.include_router(processing.router)
+    app.include_router(documents.router)
 
     @app.middleware("http")
     async def prevent_authentication_caching(request, call_next):

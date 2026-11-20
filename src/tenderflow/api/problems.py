@@ -34,6 +34,12 @@ _ERRORS = {
         "Idempotency key was already used for a different request",
     ),
     "invalid_cursor": (422, "Invalid page cursor"),
+    "document_not_found": (404, "Document not found"),
+    "upload_too_large": (413, "Upload exceeds configured limit"),
+    "unsupported_document": (415, "Unsupported or malformed source document"),
+    "sources_frozen": (409, "Source changes require a new linked tender"),
+    "document_limit": (409, "Tender document limit reached"),
+    "storage_unavailable": (503, "Private object storage unavailable"),
     "processing_run_not_found": (404, "Processing run not found"),
     "processing_conflict": (
         409,
