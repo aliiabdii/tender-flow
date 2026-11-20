@@ -12,6 +12,7 @@ pytest_plugins = [
     "tests.support.identity",
     "tests.support.entra",
     "tests.support.tenders",
+    "tests.support.processing",
 ]
 
 

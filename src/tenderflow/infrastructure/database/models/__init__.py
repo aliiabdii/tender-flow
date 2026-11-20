@@ -9,6 +9,10 @@ from tenderflow.infrastructure.database.models.identity import (
     User,
     UserRole,
 )
+from tenderflow.infrastructure.database.models.processing import (
+    ProcessingItem,
+    ProcessingRun,
+)
 from tenderflow.infrastructure.database.models.tenders import (
     Buyer,
     IdempotencyKey,
@@ -30,4 +34,6 @@ __all__ = [
     "Tender",
     "TenderContributor",
     "IdempotencyKey",
+    "ProcessingItem",
+    "ProcessingRun",
 ]

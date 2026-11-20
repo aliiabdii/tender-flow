@@ -46,6 +46,7 @@ Revision `0002` adds local identities, sessions, throttling and audit records.
 Revision `0003` adds explicitly linked external identities.
 Revision `0004` adds buyers, versioned tenders, contributor history and
 transactional idempotency records.
+Revision `0005` adds durable processing runs and items.
 
 To run the API on the host, override only that command's URL using the
 loopback port assigned by Compose:
@@ -275,6 +276,62 @@ snapshot; concurrent inserts after the marker may appear on later pages.
 Creation and preparation edits retain unique contributor membership, while
 reads do not contribute. Audit responses project only validated identifier,
 version, role and state metadata, never titles, customer numbers or raw requests.
+
+## Processing progress and retries
+
+`GET /api/v1/processing-runs/{id}` returns the run kind, status, persisted item
+counts, warnings, timestamps, replacement/retry references and an `items_url`.
+Follow that URL for cursor-paginated item results and safe failure codes.
+Managers and approvers can read progress; `admin` alone grants no access.
+Responses use `Cache-Control: no-store`; reads do not add contributors.
+Counts come from persisted item states, not worker-process memory.
+`completed_count` includes successes and failures; superseded items are counted
+separately. A run becomes `partial_failure` when all work finishes with a mix of
+successes and failures. No-match is a success, not a technical failure.
+
+Managers explicitly retry through:
+
+```http
+POST /api/v1/processing-runs/{id}/retries
+Idempotency-Key: <new-key-for-this-retry-command>
+```
+
+No body is required; `{}` is accepted and other fields are rejected. The command
+returns `202`, a **new run ID**, and its status URL in `Location`. Only failed
+items whose input versions still match are copied, with new item IDs and links
+to the original failures. Successful work is not repeated. The original items
+and their outcomes remain available; the original run becomes superseded and
+points to the replacement. Repeating the command with the same user/key returns
+the same retry run. Keys use the existing configurable idempotency retention.
+A different retry key against a superseded run, a still-active run, or a run
+without eligible failures returns `409`.
+
+Automatic worker retries remain separate and bounded. When the queue reports
+an exhausted failure (including recovered crashes), status reads and retry
+commands reconcile unfinished application items to the safe `worker_failed`
+code. Cancelled, aborted or removed jobs are also reconciled without erasing
+already-published outcomes. A job that finishes without publishing a result becomes
+an application failure. Upstream exception bodies, task names, queue arguments
+and internal job IDs are not exposed through these APIs.
+
+This increment supplies the shared processing foundation, not a public
+start-arbitrary-task endpoint. Stage-specific creation endpoints and real
+executors arrive with extraction, matching, lookup, pricing and export features.
+The internal services create runs and defer tasks transactionally with only
+`item_id` in job arguments. Workers capture validated input versions in a short
+transaction, perform external work outside transactions, then conditionally
+publish in another short transaction. Duplicate, stale or superseded completion
+cannot replace a current outcome. Test-only worker tasks exercise real execution,
+bounded failures and crash recovery without contacting any external service.
+
+Currently items are run-level and current-run uniqueness is per tender/kind.
+Document/line foreign keys, ownership checks and subject-specific version
+fingerprints must be added alongside their real models before those workers
+are enabled. Run-level extraction checks source revision; other run-level work
+also checks preparation version, never aggregate content revision.
+Concrete adapters must include all command inputs in their idempotency hash,
+refine replacement scope for independent line work, and apply actual offer
+changes/revision increments atomically only when publication is accepted.
 
 ## Tests
 

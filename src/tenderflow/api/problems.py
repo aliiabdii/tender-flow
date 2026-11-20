@@ -34,6 +34,11 @@ _ERRORS = {
         "Idempotency key was already used for a different request",
     ),
     "invalid_cursor": (422, "Invalid page cursor"),
+    "processing_run_not_found": (404, "Processing run not found"),
+    "processing_conflict": (
+        409,
+        "Processing inputs or state do not allow this command",
+    ),
 }
 
 
